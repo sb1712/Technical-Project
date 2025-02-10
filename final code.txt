@@ -1,0 +1,165 @@
+#define BLYNK_TEMPLATE_ID "TMPL2x2EEnRhd"
+#define BLYNK_TEMPLATE_NAME "Smart Helmet"
+#define BLYNK_AUTH_TOKEN "ZnvJCGhwbeqrgKzwgTARBSlDo6Gp_MJW"
+
+
+#include "Arduino.h"
+#include "DHT.h"
+#include <WiFi.h>
+#include <WiFiClient.h>
+#include <BlynkSimpleEsp32.h>
+
+
+#define DHTPIN 26  
+#define gas 35
+#define obj1 32
+#define DHTTYPE DHT11
+#define analog 34
+#define ldr 33
+#define danger 18
+#define relay 19
+#define fsense 27
+#define BLYNK_PRINT Serial
+
+BlynkTimer iottimer;
+
+float t;
+float h;
+float value;
+
+DHT dht(DHTPIN, DHTTYPE);
+
+char ssid[] = "Girrafeproblem";
+char pass[] = "Girrafe420";
+
+int detectobjActive = 0;
+int detectforceActive = 0;
+int dangergasActive = 0;
+int hightempActive = 0;
+int lightActive = 0;
+
+void iotupdate()
+{
+  Blynk.virtualWrite(V0, t );
+  Blynk.virtualWrite(V1, h);
+  Blynk.virtualWrite(V2, lightActive);
+  Blynk.virtualWrite(V3, detectforceActive);
+  Blynk.virtualWrite(V4, value);
+  Blynk.virtualWrite(V5,detectobjActive);
+}
+
+
+void alarm(int gActive, int fActive, int oActive, int tActive)
+{
+  if((gActive | fActive | oActive | tActive) == 0)
+  {
+    digitalWrite(danger, LOW);
+  }
+  else
+  {
+    digitalWrite(danger,HIGH);      
+  }
+}
+
+void setup() 
+{
+  Serial.begin(115200);
+
+  pinMode(gas, INPUT);
+  pinMode(obj1, INPUT);
+  pinMode(danger, OUTPUT);
+  pinMode(relay, OUTPUT);
+  pinMode(fsense, INPUT);
+
+  dht.begin();
+
+  digitalWrite(relay, HIGH);
+
+  Blynk.begin(BLYNK_AUTH_TOKEN, ssid, pass);
+  iottimer.setInterval(1000L, iotupdate);
+}
+
+void loop() 
+{
+
+  Blynk.run();
+  iottimer.run();
+
+  t = dht.readTemperature();
+  h = dht.readHumidity();
+
+  value = analogRead(analog);
+  int light = analogRead(ldr);
+  bool fdata = digitalRead(fsense);
+
+
+  bool highgas = (digitalRead(gas)==HIGH);
+  bool detect1 = (digitalRead(obj1)==HIGH);
+
+  //Serial.println(light);
+  Serial.print("MQ-2: ");
+  Serial.println(value);
+  Serial.print("FSENSE: ");
+  Serial.println(fdata);
+
+  if(light <= 100)
+  {
+    Serial.println("LIGHT ON");
+    lightActive = 1;
+    digitalWrite(relay, LOW);
+  }
+  if(light > 100)
+  {
+    Serial.println("LIGHT OFF");
+    lightActive = 0;
+    digitalWrite(relay, HIGH);
+  }
+/*
+  if (value > 600)
+  {
+    Serial.print("Danger!\n");
+    dangergasActive = 1;
+  }
+  if (value < 600)
+  {
+    dangergasActive = 0;
+  }
+*/
+  if(fdata == HIGH)
+  {
+    Serial.println("HIGH FORCE");
+    detectforceActive = 1;
+  }
+  if(!fdata)
+  {
+    //Serial.println("LOW FORCE");
+    detectforceActive = 0;
+  }
+
+
+  if (detect1)
+  {
+      Serial.print("First object\n");
+      detectobjActive = 1;
+  }
+  if (!detect1)
+  {
+      detectobjActive = 0;
+  }
+
+  if(t>=38)
+  {
+      Serial.print(t);
+      Serial.print(F("°C \n"));
+      hightempActive = 1;
+  }
+  if(t<38)
+  {
+      Serial.print(t);
+      Serial.print(F("°C \n"));
+      hightempActive = 0;
+  }
+
+  alarm(dangergasActive, detectforceActive, detectobjActive, hightempActive);
+  delay(100);
+}
